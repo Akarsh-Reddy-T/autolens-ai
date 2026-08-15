@@ -25,6 +25,9 @@ test("server-renders the AutoLens decision cockpit", async () => {
   assert.match(html, /<title>AutoLens AI/);
   assert.match(html, /AutoLens/);
   assert.match(html, /Know the right price before you buy/);
+  assert.match(html, /Search a car/);
+  assert.match(html, /Car brand/);
+  assert.match(html, /Car model/);
   assert.match(html, /Best comparable listings/);
   assert.match(html, /Your 3-step playbook/);
   assert.match(html, /og\.png/);

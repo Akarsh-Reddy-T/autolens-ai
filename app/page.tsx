@@ -156,6 +156,8 @@ function PriceHistory({ values }: { values: number[] }) {
 
 export default function Home() {
   const [vehicleKey, setVehicleKey] = useState<VehicleKey>("rav4");
+  const [searchMake, setSearchMake] = useState("Toyota");
+  const [searchModel, setSearchModel] = useState("RAV4");
   const [selectedListingId, setSelectedListingId] = useState(1);
   const [zip, setZip] = useState("80206");
   const [radius, setRadius] = useState(50);
@@ -192,6 +194,24 @@ export default function Home() {
     if (sort === "mileage") return items.sort((a, b) => a.miles - b.miles);
     return items;
   }, [vehicle.listings, sort]);
+
+  const availableModels = useMemo(
+    () => (Object.values(vehicles) as Vehicle[]).filter((item) => item.make === searchMake),
+    [searchMake],
+  );
+
+  function searchMarket(event: FormEvent) {
+    event.preventDefault();
+    const match = (Object.values(vehicles) as Vehicle[]).find(
+      (item) => item.make === searchMake && item.model === searchModel,
+    );
+    if (match) {
+      chooseVehicle(match.key);
+      setNotice(`${match.make} ${match.model} market loaded`);
+    } else {
+      setNotice("That vehicle needs the live catalog—showing the closest demo market");
+    }
+  }
 
   async function analyzeVehicle(event?: FormEvent) {
     event?.preventDefault();
@@ -246,6 +266,8 @@ export default function Home() {
       condition,
     });
     setVehicleKey(key);
+    setSearchMake(next.make);
+    setSearchModel(next.model);
     setSelectedListingId(listing.id);
     setValuation(nextValuation);
     setTargetPrice(nextValuation.targetPrice);
@@ -298,6 +320,16 @@ export default function Home() {
       </div>
 
       <main id="top">
+        <form className="car-search-bar" onSubmit={searchMarket}>
+          <div className="search-lead"><span><Search size={19} /></span><div><strong>Search a car</strong><small>Compare the local market</small></div></div>
+          <label><span>Brand</span><select value={searchMake} onChange={(event) => { const make = event.target.value; const first = (Object.values(vehicles) as Vehicle[]).find((item) => item.make === make); setSearchMake(make); setSearchModel(first?.model ?? ""); }} aria-label="Car brand">{Array.from(new Set((Object.values(vehicles) as Vehicle[]).map((item) => item.make))).map((make) => <option key={make}>{make}</option>)}</select></label>
+          <label><span>Model</span><select value={searchModel} onChange={(event) => setSearchModel(event.target.value)} aria-label="Car model">{availableModels.map((item) => <option key={item.key} value={item.model}>{item.model} {item.trim}</option>)}</select></label>
+          <label><span>Condition</span><select value={condition} onChange={(event) => setCondition(event.target.value as "new" | "used")} aria-label="New or used"><option value="used">Used</option><option value="new">New</option></select></label>
+          <label><span>ZIP code</span><div className="compact-input"><MapPin size={14} /><input value={zip} onChange={(event) => setZip(event.target.value.replace(/\D/g, "").slice(0, 5))} inputMode="numeric" aria-label="Search ZIP code" /></div></label>
+          <label><span>Radius</span><select value={radius} onChange={(event) => setRadius(Number(event.target.value))} aria-label="Search radius"><option value={25}>25 mi</option><option value={50}>50 mi</option><option value={100}>100 mi</option><option value={250}>250 mi</option></select></label>
+          <button className="primary-button" disabled={zip.length !== 5}><Search size={16} />Search market</button>
+        </form>
+
         <section className="vehicle-toolbar">
           <div>
             <div className="eyebrow"><span>USED</span><span className="dot" />{vehicle.body}<span className="dot" />Updated 11 min ago</div>
