@@ -108,6 +108,7 @@ h1 > span { color: #7a8781; font-weight: 480; }
 .full { width: 100%; }
 
 .hero-grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(320px, .75fr); gap: 18px; align-items: stretch; }
+.hero-grid > *, .content-grid > * { min-width: 0; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); }
 .valuation-card, .history-card, .trend-card, .listings-card, .maintenance-card, .alternatives-card, .ownership-card, .target-card { padding: 24px; }
 .card-topline, .card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
