@@ -25,9 +25,10 @@ test("server-renders the AutoLens decision cockpit", async () => {
   assert.match(html, /<title>AutoLens AI/);
   assert.match(html, /AutoLens/);
   assert.match(html, /Know the right price before you buy/);
-  assert.match(html, /Search a car/);
-  assert.match(html, /Car brand/);
+  assert.match(html, /Search any car/);
+  assert.match(html, /Car make/);
   assert.match(html, /Car model/);
+  assert.match(html, /Model year/);
   assert.match(html, /Best comparable listings/);
   assert.match(html, /Plan the cost after you buy/);
   assert.match(html, /Projected total/);
@@ -49,6 +50,9 @@ test("keeps valuation logic validated, explainable, and deployable", async () =>
 
   assert.match(page, /Sample market data/);
   assert.match(page, /licensed listing and vehicle-history providers/);
+  assert.match(page, /GetModelsForMakeYear/);
+  assert.match(page, /recallsByVehicle/);
+  assert.match(page, /We will not invent a market price/);
   assert.match(route, /valuationSchema\.safeParse/);
   assert.match(route, /scoreValuation/);
   assert.match(engine, /confidence/);

@@ -28,7 +28,7 @@ import {
   Wrench,
   X,
 } from "lucide-react";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { scoreValuation, type ValuationResult } from "../lib/market-engine";
 
 type VehicleKey = "rav4" | "crv" | "cx5";
@@ -76,6 +76,26 @@ type MaintenanceProfile = {
   annual: number[];
   classAnnual: number[];
   milestones: ServiceMilestone[];
+};
+
+type CatalogModel = {
+  Make_ID: number;
+  Make_Name: string;
+  Model_ID: number;
+  Model_Name: string;
+};
+
+type RecallCampaign = {
+  NHTSACampaignNumber?: string;
+  Component?: string;
+  Summary?: string;
+  Remedy?: string;
+};
+
+type CatalogVehicle = {
+  year: number;
+  make: string;
+  model: string;
 };
 
 const vehicles: Record<VehicleKey, Vehicle> = {
@@ -192,9 +212,28 @@ const alternatives = [
   { key: "rav4" as VehicleKey, strength: "Strong resale value" },
 ];
 
+const popularMakes = [
+  "Acura", "Audi", "BMW", "Buick", "Cadillac", "Chevrolet", "Chrysler", "Dodge", "Ford", "Genesis",
+  "GMC", "Honda", "Hyundai", "INFINITI", "Jeep", "Kia", "Land Rover", "Lexus", "Lincoln", "Mazda",
+  "Mercedes-Benz", "MINI", "Mitsubishi", "Nissan", "Porsche", "RAM", "Subaru", "Tesla", "Toyota", "Volkswagen", "Volvo",
+];
+
+const newestCatalogYear = new Date().getFullYear() + 1;
+const catalogYears = Array.from({ length: newestCatalogYear - 1980 }, (_, index) => newestCatalogYear - index);
+
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(value);
 const formatNumber = (value: number) => new Intl.NumberFormat("en-US").format(value);
+
+async function fetchNhtsaModels(make: string, year: number, signal?: AbortSignal) {
+  const endpoint = `https://vpic.nhtsa.dot.gov/api/vehicles/GetModelsForMakeYear/make/${encodeURIComponent(make)}/modelyear/${year}?format=json`;
+  const response = await fetch(endpoint, { signal });
+  if (!response.ok) throw new Error("Catalog unavailable");
+  const data = await response.json() as { Results?: CatalogModel[] };
+  return Array.from(
+    new Map((data.Results ?? []).map((item) => [`${item.Make_Name}:${item.Model_Name}`, item])).values(),
+  ).sort((a, b) => a.Model_Name.localeCompare(b.Model_Name));
+}
 
 function listingForCondition(listing: Listing, condition: "new" | "used", index: number): Listing {
   if (condition === "used") return listing;
@@ -229,6 +268,14 @@ export default function Home() {
   const [vehicleKey, setVehicleKey] = useState<VehicleKey>("rav4");
   const [searchMake, setSearchMake] = useState("Toyota");
   const [searchModel, setSearchModel] = useState("RAV4");
+  const [searchYear, setSearchYear] = useState(2021);
+  const [catalogModels, setCatalogModels] = useState<CatalogModel[]>([]);
+  const [catalogStatus, setCatalogStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [loadedCatalogKey, setLoadedCatalogKey] = useState("");
+  const [catalogVehicle, setCatalogVehicle] = useState<CatalogVehicle | null>(null);
+  const [catalogRecalls, setCatalogRecalls] = useState<RecallCampaign[]>([]);
+  const [recallStatus, setRecallStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const catalogCache = useRef(new Map<string, CatalogModel[]>());
   const [selectedListingId, setSelectedListingId] = useState(1);
   const [zip, setZip] = useState("80206");
   const [radius, setRadius] = useState(50);
@@ -283,10 +330,64 @@ export default function Home() {
     return items;
   }, [marketListings, sort]);
 
-  const availableModels = useMemo(
-    () => (Object.values(vehicles) as Vehicle[]).filter((item) => item.make === searchMake),
-    [searchMake],
-  );
+  const makeSuggestions = useMemo(() => {
+    const query = searchMake.trim().toLowerCase();
+    return Array.from(new Set([...popularMakes, ...catalogModels.map((item) => item.Make_Name)]))
+      .filter((make) => !query || make.toLowerCase().includes(query))
+      .slice(0, 40);
+  }, [catalogModels, searchMake]);
+
+  const modelSuggestions = useMemo(() => {
+    const make = searchMake.trim().toLowerCase();
+    const model = searchModel.trim().toLowerCase();
+    const exactMake = catalogModels.filter((item) => item.Make_Name.toLowerCase() === make);
+    const pool = exactMake.length ? exactMake : catalogModels;
+    return pool
+      .filter((item) => !model || item.Model_Name.toLowerCase().includes(model));
+  }, [catalogModels, searchMake, searchModel]);
+
+  useEffect(() => {
+    const make = searchMake.trim();
+    const cacheKey = `${searchYear}:${make.toLowerCase()}`;
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      if (make.length < 2) {
+        setCatalogModels([]);
+        setCatalogStatus("idle");
+        setLoadedCatalogKey("");
+        return;
+      }
+
+      const cached = catalogCache.current.get(cacheKey);
+      if (cached) {
+        setCatalogModels(cached);
+        setCatalogStatus("ready");
+        setLoadedCatalogKey(cacheKey);
+        return;
+      }
+
+      setCatalogModels([]);
+      setCatalogStatus("loading");
+      setLoadedCatalogKey("");
+      try {
+        const unique = await fetchNhtsaModels(make, searchYear, controller.signal);
+        catalogCache.current.set(cacheKey, unique);
+        setCatalogModels(unique);
+        setCatalogStatus("ready");
+        setLoadedCatalogKey(cacheKey);
+      } catch (error) {
+        if ((error as Error).name === "AbortError") return;
+        setCatalogModels([]);
+        setCatalogStatus("error");
+        setLoadedCatalogKey("");
+      }
+    }, make.length < 2 || catalogCache.current.has(cacheKey) ? 0 : 450);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [searchMake, searchYear]);
 
   const maintenanceForecast = useMemo(() => {
     const profile = maintenanceProfiles[vehicleKey];
@@ -312,16 +413,77 @@ export default function Home() {
     };
   }, [vehicleKey, selectedListing.miles, maintenanceHorizon]);
 
-  function searchMarket(event: FormEvent) {
+  async function searchMarket(event: FormEvent) {
     event.preventDefault();
+    const normalizedMake = searchMake.trim().toLowerCase();
+    const normalizedModel = searchModel.trim().toLowerCase();
+    const requestedCatalogKey = `${searchYear}:${normalizedMake}`;
     const match = (Object.values(vehicles) as Vehicle[]).find(
-      (item) => item.make === searchMake && item.model === searchModel,
+      (item) => item.make.toLowerCase() === normalizedMake &&
+        item.model.toLowerCase() === normalizedModel &&
+        (condition === "new" ? searchYear === 2026 : item.year === searchYear),
     );
     if (match) {
+      setCatalogVehicle(null);
+      setCatalogRecalls([]);
+      setRecallStatus("idle");
       chooseVehicle(match.key);
       setNotice(`${match.make} ${match.model} market loaded`);
-    } else {
-      setNotice("That vehicle needs the live catalog—showing the closest demo market");
+      return;
+    }
+
+    let searchableCatalog = catalogModels;
+    if (catalogStatus !== "ready" || loadedCatalogKey !== requestedCatalogKey || searchableCatalog.length === 0) {
+      setCatalogStatus("loading");
+      try {
+        searchableCatalog = await fetchNhtsaModels(searchMake.trim(), searchYear);
+        catalogCache.current.set(requestedCatalogKey, searchableCatalog);
+        setCatalogModels(searchableCatalog);
+        setCatalogStatus("ready");
+        setLoadedCatalogKey(requestedCatalogKey);
+      } catch {
+        setCatalogStatus("error");
+        setLoadedCatalogKey("");
+        setNotice("The official NHTSA catalog is temporarily unavailable—please try again");
+        return;
+      }
+    }
+
+    const catalogMatch = searchableCatalog.find(
+      (item) => item.Make_Name.toLowerCase() === normalizedMake && item.Model_Name.toLowerCase() === normalizedModel,
+    ) ?? searchableCatalog.find(
+      (item) => item.Make_Name.toLowerCase().includes(normalizedMake) && item.Model_Name.toLowerCase() === normalizedModel,
+    );
+
+    if (!catalogMatch) {
+      setNotice(catalogStatus === "loading" ? "NHTSA catalog is still loading—try again in a moment" : "Choose a make and model from the NHTSA catalog suggestions");
+      return;
+    }
+
+    const selection = {
+      year: searchYear,
+      make: catalogMatch.Make_Name,
+      model: catalogMatch.Model_Name,
+    };
+    setCatalogVehicle(selection);
+    setCatalogRecalls([]);
+    setRecallStatus("loading");
+    setNotice(`${selection.year} ${selection.make} ${selection.model} found in the NHTSA catalog`);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+
+    try {
+      const params = new URLSearchParams({
+        make: selection.make,
+        model: selection.model,
+        modelYear: String(selection.year),
+      });
+      const response = await fetch(`https://api.nhtsa.gov/recalls/recallsByVehicle?${params.toString()}`);
+      if (!response.ok) throw new Error("Recall lookup unavailable");
+      const data = await response.json() as { results?: RecallCampaign[]; Results?: RecallCampaign[] };
+      setCatalogRecalls(data.results ?? data.Results ?? []);
+      setRecallStatus("ready");
+    } catch {
+      setRecallStatus("error");
     }
   }
 
@@ -380,6 +542,10 @@ export default function Home() {
     setVehicleKey(key);
     setSearchMake(next.make);
     setSearchModel(next.model);
+    setSearchYear(condition === "new" ? 2026 : next.year);
+    setCatalogVehicle(null);
+    setCatalogRecalls([]);
+    setRecallStatus("idle");
     setSelectedListingId(listing.id);
     setValuation(nextValuation);
     setTargetPrice(nextValuation.targetPrice);
@@ -441,15 +607,49 @@ export default function Home() {
 
       <main id="top">
         <form className="car-search-bar" onSubmit={searchMarket}>
-          <div className="search-lead"><span><Search size={19} /></span><div><strong>Search a car</strong><small>Compare the local market</small></div></div>
-          <label><span>Brand</span><select value={searchMake} onChange={(event) => { const make = event.target.value; const first = (Object.values(vehicles) as Vehicle[]).find((item) => item.make === make); setSearchMake(make); setSearchModel(first?.model ?? ""); }} aria-label="Car brand">{Array.from(new Set((Object.values(vehicles) as Vehicle[]).map((item) => item.make))).map((make) => <option key={make}>{make}</option>)}</select></label>
-          <label><span>Model</span><select value={searchModel} onChange={(event) => setSearchModel(event.target.value)} aria-label="Car model">{availableModels.map((item) => <option key={item.key} value={item.model}>{item.model} {item.trim}</option>)}</select></label>
+          <div className="search-lead"><span><Search size={19} /></span><div><strong>Search any car</strong><small>Official catalog + local market</small></div></div>
+          <label><span>Make</span><input list="car-make-options" value={searchMake} onChange={(event) => { setSearchMake(event.target.value); setSearchModel(""); }} placeholder="Type any make" autoComplete="off" aria-label="Car make" /><datalist id="car-make-options">{makeSuggestions.map((make) => <option value={make} key={make} />)}</datalist></label>
+          <label className="model-search"><span>Model</span><input list="car-model-options" value={searchModel} onChange={(event) => setSearchModel(event.target.value)} placeholder={catalogStatus === "loading" ? "Loading models…" : "Type or choose model"} autoComplete="off" aria-label="Car model" /><datalist id="car-model-options">{modelSuggestions.map((item) => <option value={item.Model_Name} key={`${item.Make_ID}-${item.Model_ID}`} />)}</datalist><em className={`catalog-state ${catalogStatus}`}>{catalogStatus === "loading" ? "Checking NHTSA…" : catalogStatus === "ready" ? `${catalogModels.length} official matches` : catalogStatus === "error" ? "Catalog temporarily unavailable" : "Type a make to search"}</em></label>
+          <label><span>Year</span><select value={searchYear} onChange={(event) => setSearchYear(Number(event.target.value))} aria-label="Model year">{catalogYears.map((year) => <option value={year} key={year}>{year}</option>)}</select></label>
           <label><span>Condition</span><select value={condition} onChange={(event) => setCondition(event.target.value as "new" | "used")} aria-label="New or used"><option value="used">Used</option><option value="new">New</option></select></label>
           <label><span>ZIP code</span><div className="compact-input"><MapPin size={14} /><input value={zip} onChange={(event) => setZip(event.target.value.replace(/\D/g, "").slice(0, 5))} inputMode="numeric" aria-label="Search ZIP code" /></div></label>
           <label><span>Radius</span><select value={radius} onChange={(event) => setRadius(Number(event.target.value))} aria-label="Search radius"><option value={25}>25 mi</option><option value={50}>50 mi</option><option value={100}>100 mi</option><option value={250}>250 mi</option></select></label>
-          <button className="primary-button" disabled={zip.length !== 5}><Search size={16} />Search market</button>
+          <button className="primary-button" disabled={zip.length !== 5 || !searchMake.trim() || !searchModel.trim()}><Search size={16} />Search market</button>
         </form>
 
+        {catalogVehicle ? (
+          <section className="catalog-result" aria-live="polite">
+            <div className="catalog-result-heading">
+              <div>
+                <span className="catalog-badge"><ShieldCheck size={15} />NHTSA catalog match</span>
+                <p className="section-label">NATIONAL VEHICLE CATALOG</p>
+                <h1>{catalogVehicle.year} {catalogVehicle.make} {catalogVehicle.model}</h1>
+                <p>We found this make and model in the official U.S. vehicle catalog. The three original vehicles are no longer the search limit.</p>
+              </div>
+              <div className="catalog-location"><MapPin size={16} /><span>{zip}<small>{radius}-mile market · {condition}</small></span></div>
+            </div>
+
+            <div className="catalog-readiness">
+              <article><span className="catalog-signal good"><Check size={17} /></span><p><small>Make and model</small><strong>Official catalog record</strong><em>Manufacturer-submitted NHTSA data</em></p></article>
+              <article><span className={`catalog-signal ${recallStatus === "error" ? "warn" : "good"}`}>{recallStatus === "loading" ? <span className="spinner dark" /> : recallStatus === "error" ? <AlertTriangle size={17} /> : <ShieldCheck size={17} />}</span><p><small>Model recall campaigns</small><strong>{recallStatus === "loading" ? "Checking NHTSA…" : recallStatus === "error" ? "Temporarily unavailable" : `${catalogRecalls.length} returned`}</strong><em>Confirm applicability using the complete VIN</em></p></article>
+              <article><span className="catalog-signal warn"><CircleDollarSign size={17} /></span><p><small>Local prices and listings</small><strong>Provider connection needed</strong><em>We will not invent a market price</em></p></article>
+              <article><span className="catalog-signal warn"><FileCheck2 size={17} /></span><p><small>Accident and service history</small><strong>VIN provider needed</strong><em>Unknown until a licensed report is returned</em></p></article>
+            </div>
+
+            {recallStatus === "ready" && catalogRecalls.length > 0 && (
+              <div className="catalog-recalls">
+                <div className="subsection-heading"><strong>Recent recall campaigns returned by NHTSA</strong><span>Model-level results, not a VIN clearance</span></div>
+                <div>{catalogRecalls.slice(0, 3).map((recall, index) => <article key={recall.NHTSACampaignNumber ?? index}><span>{recall.NHTSACampaignNumber ?? `Campaign ${index + 1}`}</span><strong>{recall.Component ?? "Vehicle safety campaign"}</strong><p>{recall.Summary ?? "Open the NHTSA record for full campaign details."}</p></article>)}</div>
+              </div>
+            )}
+
+            <div className="catalog-actions">
+              <button className="outline-button" onClick={() => { setCatalogVehicle(null); setCatalogRecalls([]); setRecallStatus("idle"); window.scrollTo({ top: 0, behavior: "smooth" }); }}><Search size={16} />Edit search</button>
+              <button className="primary-button" onClick={() => chooseVehicle("rav4")}><CarFront size={16} />Explore the full RAV4 demo</button>
+            </div>
+            <p className="catalog-source"><Info size={14} />Vehicle identity and recall results come from public NHTSA APIs. Accurate local pricing, title, accident, service, and maintenance data still require licensed providers.</p>
+          </section>
+        ) : <>
         <section className="vehicle-toolbar">
           <div>
             <div className="eyebrow"><span>{condition.toUpperCase()}</span><span className="dot" />{vehicle.body}<span className="dot" />Updated 11 min ago</div>
@@ -646,6 +846,7 @@ export default function Home() {
             </article>
           </aside>
         </section>
+        </>}
       </main>
 
       <footer><div className="brand"><span className="brand-mark"><CarFront size={18} /></span><span>AutoLens<em>AI</em></span></div><p>Transparent car intelligence for confident decisions.</p><div><a href="#top">Methodology</a><a href="#top">Data sources</a><a href="#top">Privacy</a></div></footer>
