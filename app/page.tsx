@@ -471,19 +471,23 @@ export default function Home() {
     setNotice(`${selection.year} ${selection.make} ${selection.model} found in the NHTSA catalog`);
     window.scrollTo({ top: 0, behavior: "smooth" });
 
+    const recallController = new AbortController();
+    const recallTimeout = window.setTimeout(() => recallController.abort(), 10_000);
     try {
       const params = new URLSearchParams({
         make: selection.make,
         model: selection.model,
         modelYear: String(selection.year),
       });
-      const response = await fetch(`https://api.nhtsa.gov/recalls/recallsByVehicle?${params.toString()}`);
+      const response = await fetch(`https://api.nhtsa.gov/recalls/recallsByVehicle?${params.toString()}`, { signal: recallController.signal });
       if (!response.ok) throw new Error("Recall lookup unavailable");
       const data = await response.json() as { results?: RecallCampaign[]; Results?: RecallCampaign[] };
       setCatalogRecalls(data.results ?? data.Results ?? []);
       setRecallStatus("ready");
     } catch {
       setRecallStatus("error");
+    } finally {
+      window.clearTimeout(recallTimeout);
     }
   }
 
