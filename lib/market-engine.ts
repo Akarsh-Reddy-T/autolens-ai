@@ -92,7 +92,7 @@ export function scoreValuation(input: ValuationInput): ValuationResult {
     factors: [
       { label: "Mileage vs. local comps", impact: roundToTen(mileageImpact) },
       { label: "Trim and equipment", impact: roundToTen(trimImpact) },
-      { label: "Denver market demand", impact: regionalImpact },
+      { label: "Regional market demand", impact: regionalImpact },
       { label: "Reported history", impact: historyImpact },
     ],
   };

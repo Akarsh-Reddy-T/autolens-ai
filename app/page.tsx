@@ -56,8 +56,26 @@ type Vehicle = {
   fairValue: number;
   trend: number;
   recallCount: number;
+  vin: string;
+  serviceRecords: number;
+  lastServiceMiles: number;
+  firstRegistered: string;
   listings: Listing[];
   prices: number[];
+};
+
+type ServiceMilestone = {
+  atMiles: number;
+  title: string;
+  detail: string;
+  low: number;
+  high: number;
+};
+
+type MaintenanceProfile = {
+  annual: number[];
+  classAnnual: number[];
+  milestones: ServiceMilestone[];
 };
 
 const vehicles: Record<VehicleKey, Vehicle> = {
@@ -74,6 +92,10 @@ const vehicles: Record<VehicleKey, Vehicle> = {
     fairValue: 26_240,
     trend: -2.8,
     recallCount: 1,
+    vin: "2T3P1RFV•••18462",
+    serviceRecords: 8,
+    lastServiceMiles: 4_120,
+    firstRegistered: "Jun 2021",
     prices: [27_950, 27_620, 27_410, 26_980, 26_730, 26_510, 26_240],
     listings: [
       { id: 1, dealer: "Mile High Toyota", distance: 8, price: 24_890, miles: 47_281, badge: "Great", history: "Clean · 1 owner" },
@@ -95,6 +117,10 @@ const vehicles: Record<VehicleKey, Vehicle> = {
     fairValue: 25_780,
     trend: -2.1,
     recallCount: 2,
+    vin: "7FARW2H5•••93108",
+    serviceRecords: 7,
+    lastServiceMiles: 3_740,
+    firstRegistered: "Aug 2021",
     prices: [27_210, 27_020, 26_860, 26_490, 26_170, 25_960, 25_780],
     listings: [
       { id: 11, dealer: "Schomp Honda", distance: 11, price: 24_990, miles: 49_822, badge: "Good", history: "Clean · 1 owner" },
@@ -116,6 +142,10 @@ const vehicles: Record<VehicleKey, Vehicle> = {
     fairValue: 24_920,
     trend: -3.3,
     recallCount: 0,
+    vin: "JM3KFBCM•••52741",
+    serviceRecords: 9,
+    lastServiceMiles: 2_880,
+    firstRegistered: "May 2021",
     prices: [26_880, 26_610, 26_320, 25_940, 25_570, 25_190, 24_920],
     listings: [
       { id: 21, dealer: "McDonald Mazda", distance: 9, price: 23_780, miles: 46_140, badge: "Great", history: "Clean · 1 owner" },
@@ -126,15 +156,56 @@ const vehicles: Record<VehicleKey, Vehicle> = {
   },
 };
 
+const maintenanceProfiles: Record<VehicleKey, MaintenanceProfile> = {
+  rav4: {
+    annual: [820, 1_050, 1_480, 910, 1_670],
+    classAnnual: [980, 1_240, 1_690, 1_160, 1_920],
+    milestones: [
+      { atMiles: 50_000, title: "50k-mile service", detail: "Oil, rotation and full inspection", low: 180, high: 310 },
+      { atMiles: 60_000, title: "Tires and alignment", detail: "Four all-season tires installed", low: 860, high: 1_180 },
+      { atMiles: 75_000, title: "Fluids and filters", detail: "Brake fluid, cabin and engine filters", low: 290, high: 460 },
+    ],
+  },
+  crv: {
+    annual: [860, 1_120, 1_560, 980, 1_810],
+    classAnnual: [980, 1_240, 1_690, 1_160, 1_920],
+    milestones: [
+      { atMiles: 50_000, title: "Maintenance Minder service", detail: "Oil, rotation, filters and inspection", low: 190, high: 330 },
+      { atMiles: 60_000, title: "CVT fluid service", detail: "Transmission fluid and inspection", low: 210, high: 340 },
+      { atMiles: 65_000, title: "Tires and alignment", detail: "Four all-season tires installed", low: 880, high: 1_220 },
+    ],
+  },
+  cx5: {
+    annual: [900, 1_180, 1_640, 1_010, 1_890],
+    classAnnual: [980, 1_240, 1_690, 1_160, 1_920],
+    milestones: [
+      { atMiles: 50_000, title: "Scheduled service", detail: "Oil, rotation, filters and inspection", low: 200, high: 350 },
+      { atMiles: 60_000, title: "Tires and alignment", detail: "Four all-season tires installed", low: 900, high: 1_240 },
+      { atMiles: 75_000, title: "Spark plugs and fluids", detail: "Ignition, brake fluid and inspection", low: 420, high: 680 },
+    ],
+  },
+};
+
 const alternatives = [
-  { key: "cx5" as VehicleKey, name: "2021 Mazda CX-5 Touring", price: 24_920, delta: -1_320, strength: "Premium interior", score: 86 },
-  { key: "crv" as VehicleKey, name: "2021 Honda CR-V EX", price: 25_780, delta: -460, strength: "More cargo room", score: 84 },
-  { key: "rav4" as VehicleKey, name: "2020 Subaru Forester Premium", price: 24_580, delta: -1_660, strength: "Best visibility", score: 82 },
+  { key: "cx5" as VehicleKey, strength: "Premium interior" },
+  { key: "crv" as VehicleKey, strength: "More cargo room" },
+  { key: "rav4" as VehicleKey, strength: "Strong resale value" },
 ];
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(value);
 const formatNumber = (value: number) => new Intl.NumberFormat("en-US").format(value);
+
+function listingForCondition(listing: Listing, condition: "new" | "used", index: number): Listing {
+  if (condition === "used") return listing;
+  const deliveryMiles = [18, 11, 26, 7];
+  return {
+    ...listing,
+    price: listing.price + 10_500,
+    miles: deliveryMiles[index] ?? 15,
+    history: "New · 0 owners",
+  };
+}
 
 function PriceHistory({ values }: { values: number[] }) {
   const min = Math.min(...values) - 400;
@@ -164,41 +235,82 @@ export default function Home() {
   const [condition, setCondition] = useState<"new" | "used">("used");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [isMethodologyOpen, setIsMethodologyOpen] = useState(false);
+  const [isReliabilityOpen, setIsReliabilityOpen] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isAlerted, setIsAlerted] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [sort, setSort] = useState("best");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [maintenanceHorizon, setMaintenanceHorizon] = useState<1 | 3 | 5>(3);
   const [notice, setNotice] = useState("Sample market data");
   const vehicle = vehicles[vehicleKey];
-  const selectedListing = vehicle.listings.find((listing) => listing.id === selectedListingId) ?? vehicle.listings[0];
+  const marketListings = useMemo(
+    () => vehicle.listings.map((listing, index) => listingForCondition(listing, condition, index)),
+    [vehicle.listings, condition],
+  );
+  const selectedListing = marketListings.find((listing) => listing.id === selectedListingId) ?? marketListings[0];
+  const displayYear = condition === "new" ? 2026 : vehicle.year;
+  const hasReportedDamage = condition === "used" && selectedListing.history.includes("Minor");
+  const ownerCount = condition === "new" ? 0 : selectedListing.history.includes("2 owners") ? 2 : 1;
+  const comparisonListing = [...marketListings]
+    .filter((listing) => listing.id !== selectedListing.id)
+    .sort((a, b) => a.price - b.price)[0];
   const defaultValuation = useMemo(
     () => scoreValuation({
       make: vehicle.make,
       model: vehicle.model,
       trim: vehicle.trim,
-      year: vehicle.year,
+      year: displayYear,
       mileage: selectedListing.miles,
       askingPrice: selectedListing.price,
       zip,
       radius,
       condition,
-      accidentCount: selectedListing.history.includes("Minor") ? 1 : 0,
+      accidentCount: hasReportedDamage ? 1 : 0,
     }),
-    [vehicle, selectedListing, zip, radius, condition],
+    [vehicle, selectedListing, zip, radius, condition, displayYear, hasReportedDamage],
   );
   const [valuation, setValuation] = useState<ValuationResult>(() => defaultValuation);
   const [targetPrice, setTargetPrice] = useState(defaultValuation.targetPrice);
+  const targetMin = Math.floor((valuation.targetPrice * 0.96) / 10) * 10;
+  const targetMax = Math.ceil((Math.max(valuation.highRange, selectedListing.price) * 1.01) / 10) * 10;
 
   const sortedListings = useMemo(() => {
-    const items = [...vehicle.listings];
+    const items = [...marketListings];
     if (sort === "price") return items.sort((a, b) => a.price - b.price);
     if (sort === "mileage") return items.sort((a, b) => a.miles - b.miles);
     return items;
-  }, [vehicle.listings, sort]);
+  }, [marketListings, sort]);
 
   const availableModels = useMemo(
     () => (Object.values(vehicles) as Vehicle[]).filter((item) => item.make === searchMake),
     [searchMake],
   );
+
+  const maintenanceForecast = useMemo(() => {
+    const profile = maintenanceProfiles[vehicleKey];
+    const annual = profile.annual.slice(0, maintenanceHorizon);
+    const total = annual.reduce((sum, value) => sum + value, 0);
+    const classTotal = profile.classAnnual.slice(0, maintenanceHorizon).reduce((sum, value) => sum + value, 0);
+    const annualMiles = 11_500;
+    return {
+      annual,
+      total,
+      low: Math.round((total * 0.84) / 10) * 10,
+      high: Math.round((total * 1.23) / 10) * 10,
+      monthly: Math.round(total / (maintenanceHorizon * 12)),
+      savings: classTotal - total,
+      routine: Math.round(total * 0.47),
+      wear: Math.round(total * 0.36),
+      reserve: Math.round(total * 0.17),
+      milestones: profile.milestones.map((item) => {
+        const milesAway = Math.max(0, item.atMiles - selectedListing.miles);
+        const monthsAway = Math.round((milesAway / annualMiles) * 12);
+        return { ...item, timing: monthsAway <= 1 ? "Due soon" : `About ${monthsAway} months` };
+      }),
+    };
+  }, [vehicleKey, selectedListing.miles, maintenanceHorizon]);
 
   function searchMarket(event: FormEvent) {
     event.preventDefault();
@@ -220,13 +332,13 @@ export default function Home() {
       make: vehicle.make,
       model: vehicle.model,
       trim: vehicle.trim,
-      year: condition === "new" ? 2026 : vehicle.year,
-      mileage: condition === "new" ? 18 : selectedListing.miles,
-      askingPrice: condition === "new" ? selectedListing.price + 10_500 : selectedListing.price,
+      year: displayYear,
+      mileage: selectedListing.miles,
+      askingPrice: selectedListing.price,
       zip,
       radius,
       condition,
-      accidentCount: selectedListing.history.includes("Minor") ? 1 : 0,
+      accidentCount: hasReportedDamage ? 1 : 0,
     } as const;
     let result = scoreValuation(payload);
     try {
@@ -253,12 +365,12 @@ export default function Home() {
 
   function chooseVehicle(key: VehicleKey) {
     const next = vehicles[key];
-    const listing = next.listings[0];
+    const listing = listingForCondition(next.listings[0], condition, 0);
     const nextValuation = scoreValuation({
       make: next.make,
       model: next.model,
       trim: next.trim,
-      year: next.year,
+      year: condition === "new" ? 2026 : next.year,
       mileage: listing.miles,
       askingPrice: listing.price,
       zip,
@@ -271,7 +383,13 @@ export default function Home() {
     setSelectedListingId(listing.id);
     setValuation(nextValuation);
     setTargetPrice(nextValuation.targetPrice);
+    setIsSaved(false);
+    setIsHistoryOpen(false);
+    setIsMethodologyOpen(false);
+    setIsReliabilityOpen(false);
+    setSort("best");
     setIsSearchOpen(false);
+    setNotice(`${next.make} ${next.model} comparison loaded`);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -281,7 +399,7 @@ export default function Home() {
       make: vehicle.make,
       model: vehicle.model,
       trim: vehicle.trim,
-      year: vehicle.year,
+      year: displayYear,
       mileage: listing.miles,
       askingPrice: listing.price,
       zip,
@@ -291,6 +409,7 @@ export default function Home() {
     });
     setValuation(nextValuation);
     setTargetPrice(nextValuation.targetPrice);
+    setIsHistoryOpen(false);
   }
 
   return (
@@ -300,16 +419,17 @@ export default function Home() {
           <span className="brand-mark"><CarFront size={21} strokeWidth={2.4} /></span>
           <span>AutoLens<em>AI</em></span>
         </a>
-        <nav className="main-nav" aria-label="Main navigation">
-          <a className="active" href="#market">Market</a>
-          <a href="#history">History</a>
-          <a href="#alternatives">Compare</a>
-          <a href="#playbook">Buy smarter</a>
+        <nav className={`main-nav ${isMenuOpen ? "open" : ""}`} aria-label="Main navigation">
+          <a className="active" href="#market" onClick={() => setIsMenuOpen(false)}>Market</a>
+          <a href="#history" onClick={() => setIsMenuOpen(false)}>History</a>
+          <a href="#alternatives" onClick={() => setIsMenuOpen(false)}>Compare</a>
+          <a href="#maintenance" onClick={() => setIsMenuOpen(false)}>Ownership cost</a>
+          <a href="#playbook" onClick={() => setIsMenuOpen(false)}>Buy smarter</a>
         </nav>
         <div className="header-actions">
-          <button className="icon-button" aria-label="Price alerts"><Bell size={18} /></button>
-          <button className="user-button"><span>AR</span><ChevronDown size={15} /></button>
-          <button className="mobile-menu" aria-label="Open menu"><Menu size={20} /></button>
+          <button className="icon-button" aria-label={isAlerted ? "Disable price alerts" : "Enable price alerts"} onClick={() => { setIsAlerted(!isAlerted); setNotice(isAlerted ? "Price alerts paused" : "Price alerts enabled for this search"); }}><Bell size={18} fill={isAlerted ? "currentColor" : "none"} /></button>
+          <button className="user-button" aria-label="Account status" onClick={() => setNotice("Demo profile active—connect authentication for saved vehicles across devices")}><span>AR</span><ChevronDown size={15} /></button>
+          <button className="mobile-menu" aria-label={isMenuOpen ? "Close menu" : "Open menu"} aria-expanded={isMenuOpen} onClick={() => setIsMenuOpen(!isMenuOpen)}>{isMenuOpen ? <X size={20} /> : <Menu size={20} />}</button>
         </div>
       </header>
 
@@ -332,8 +452,8 @@ export default function Home() {
 
         <section className="vehicle-toolbar">
           <div>
-            <div className="eyebrow"><span>USED</span><span className="dot" />{vehicle.body}<span className="dot" />Updated 11 min ago</div>
-            <h1>{vehicle.year} {vehicle.make} {vehicle.model} <span>{vehicle.trim}</span></h1>
+            <div className="eyebrow"><span>{condition.toUpperCase()}</span><span className="dot" />{vehicle.body}<span className="dot" />Updated 11 min ago</div>
+            <h1>{displayYear} {vehicle.make} {vehicle.model} <span>{vehicle.trim}</span></h1>
             <div className="vehicle-meta">
               <span><MapPin size={14} /> {zip} · {radius} miles</span>
               <span><Gauge size={14} /> {formatNumber(selectedListing.miles)} mi</span>
@@ -380,23 +500,24 @@ export default function Home() {
                 <div key={factor.label}><span>{factor.label}</span><strong className={factor.impact >= 0 ? "positive" : "negative"}>{factor.impact >= 0 ? "+" : ""}{formatCurrency(factor.impact)}</strong></div>
               ))}
             </div>
-            <button className="text-button">See how we calculated this <ArrowRight size={15} /></button>
+            <button className="text-button" onClick={() => setIsMethodologyOpen(!isMethodologyOpen)}>{isMethodologyOpen ? "Hide calculation method" : "See how we calculated this"} <ArrowRight size={15} /></button>
+            {isMethodologyOpen && <div className="method-detail"><strong>Deterministic, explainable estimate</strong><p>Starts with model MSRP and retained value, then adjusts for age, mileage, trim, ZIP region, search radius, condition, and reported damage. This demo uses modeled—not live—comparables.</p></div>}
           </article>
 
           <article className="card history-card" id="history">
             <div className="card-heading">
               <div><p className="section-label">VEHICLE TRUST</p><h2>History snapshot</h2></div>
-              <span className="clean-badge"><CheckCircle2 size={16} />Low risk</span>
+              <span className={`clean-badge ${hasReportedDamage ? "review" : ""}`}>{hasReportedDamage ? <AlertTriangle size={16} /> : <CheckCircle2 size={16} />}{hasReportedDamage ? "Review damage" : "Low risk"}</span>
             </div>
-            <div className="vin-line"><span>VIN</span><strong>2T3P1RFV•••18462</strong><button aria-label="Vehicle information"><Info size={15} /></button></div>
+            <div className="vin-line"><span>VIN</span><strong>{vehicle.vin}</strong><button aria-label="Vehicle information" onClick={() => setNotice("Masked demo VIN—verify the complete VIN with a licensed history provider")}><Info size={15} /></button></div>
             <div className="trust-list">
               <div><span className="trust-icon good"><Check size={17} /></span><p><strong>Clean title</strong><small>No salvage, flood, or lemon record</small></p></div>
-              <div><span className="trust-icon good"><ShieldCheck size={17} /></span><p><strong>No accidents reported</strong><small>Across available sources</small></p></div>
-              <div><span className="trust-icon neutral"><UserRound size={17} /></span><p><strong>1 previous owner</strong><small>Personal use · Colorado</small></p></div>
-              <div><span className="trust-icon neutral"><Wrench size={17} /></span><p><strong>8 service records</strong><small>Last serviced 4,120 miles ago</small></p></div>
+              <div><span className={`trust-icon ${hasReportedDamage ? "alert" : "good"}`}>{hasReportedDamage ? <AlertTriangle size={17} /> : <ShieldCheck size={17} />}</span><p><strong>{hasReportedDamage ? "Minor damage reported" : "No accidents reported"}</strong><small>{hasReportedDamage ? "Inspect the event and repair quality" : "Across available demo sources"}</small></p></div>
+              <div><span className="trust-icon neutral"><UserRound size={17} /></span><p><strong>{ownerCount} previous {ownerCount === 1 ? "owner" : "owners"}</strong><small>{condition === "new" ? "Factory-new demo listing" : "Personal use · Colorado"}</small></p></div>
+              <div><span className="trust-icon neutral"><Wrench size={17} /></span><p><strong>{condition === "new" ? "Pre-delivery inspection" : `${vehicle.serviceRecords} service records`}</strong><small>{condition === "new" ? "Dealer preparation expected" : `Last serviced ${formatNumber(vehicle.lastServiceMiles)} miles ago`}</small></p></div>
             </div>
             <button className="outline-button full" onClick={() => setIsHistoryOpen(!isHistoryOpen)}><FileCheck2 size={16} />{isHistoryOpen ? "Hide detailed history" : "Review detailed history"}<ChevronRight size={16} /></button>
-            {isHistoryOpen && <div className="history-detail"><div><span>Jun 2021</span><p><strong>First registered</strong>Denver, CO</p></div><div><span>Jan 2024</span><p><strong>30k-mile service</strong>Dealer maintenance record</p></div><div><span>Apr 2026</span><p><strong>Offered for sale</strong>Mile High Toyota</p></div></div>}
+            {isHistoryOpen && <div className="history-detail">{condition === "new" ? <><div><span>Current</span><p><strong>Factory-new listing</strong>No prior-owner history expected</p></div><div><span>Delivery</span><p><strong>Inspection due</strong>Verify recall remedies and dealer preparation</p></div></> : <><div><span>{vehicle.firstRegistered}</span><p><strong>First registered</strong>Denver, CO</p></div><div><span>Jan 2024</span><p><strong>Scheduled service</strong>Dealer maintenance record</p></div>{hasReportedDamage && <div><span>Reported</span><p><strong>Minor damage event</strong>Obtain repair invoice and independent inspection</p></div>}<div><span>Apr 2026</span><p><strong>Offered for sale</strong>{selectedListing.dealer}</p></div></>}</div>}
             <p className="source-note"><Info size={13} />Demo record. A licensed NMVTIS/history feed is required before purchase.</p>
           </article>
         </section>
@@ -408,8 +529,8 @@ export default function Home() {
                 <div><p className="section-label">PRICE MOMENTUM</p><h2>Local prices are cooling</h2></div>
                 <span className="trend-badge"><TrendingDown size={15} />{Math.abs(vehicle.trend)}% in 6 months</span>
               </div>
-              <div className="trend-summary"><strong>{formatCurrency(vehicle.fairValue)}</strong><span>Median list price · {radius} mi</span><p><ArrowDownRight size={16} /> Buyers have gained about <b>$710</b> of leverage since February.</p></div>
-              <PriceHistory values={vehicle.prices} />
+              <div className="trend-summary"><strong>{formatCurrency(vehicle.fairValue + (condition === "new" ? 10_500 : 0))}</strong><span>Median list price · {radius} mi</span><p><ArrowDownRight size={16} /> Buyers have gained about <b>$710</b> of leverage since February.</p></div>
+              <PriceHistory values={vehicle.prices.map((price) => price + (condition === "new" ? 10_500 : 0))} />
               <div className="chart-footer"><span><i className="legend-dot market" />Median listing price</span><span><i className="legend-dot selected" />Selected vehicle</span><small>43 comparable listings</small></div>
             </article>
 
@@ -422,7 +543,7 @@ export default function Home() {
                 <div className="listing-row listing-header"><span>Vehicle & dealer</span><span>Mileage</span><span>History</span><span>Price</span><span /></div>
                 {sortedListings.map((listing) => (
                   <button key={listing.id} className={`listing-row ${listing.id === selectedListing.id ? "selected" : ""}`} onClick={() => selectListing(listing)}>
-                    <span className="listing-name"><i><CarFront size={20} /></i><span><strong>{vehicle.year} {vehicle.make} {vehicle.model}</strong><small>{listing.dealer} · {listing.distance} mi</small></span></span>
+                    <span className="listing-name"><i><CarFront size={20} /></i><span><strong>{displayYear} {vehicle.make} {vehicle.model}</strong><small>{listing.dealer} · {listing.distance} mi</small></span></span>
                     <span><strong>{formatNumber(listing.miles)}</strong><small>miles</small></span>
                     <span><strong>{listing.history.split(" · ")[0]}</strong><small>{listing.history.split(" · ")[1] ?? "History available"}</small></span>
                     <span className="listing-price"><strong>{formatCurrency(listing.price)}</strong><small className={`deal-${listing.badge.toLowerCase()}`}>{listing.badge} price</small></span>
@@ -430,18 +551,62 @@ export default function Home() {
                   </button>
                 ))}
               </div>
-              <button className="text-button centered">View all 43 local listings <ArrowRight size={15} /></button>
+              <button className="text-button centered" onClick={() => setNotice("Live inventory pagination is ready for a licensed listings provider")}>View all 43 local listings <ArrowRight size={15} /></button>
+            </article>
+
+            <article className="card maintenance-card" id="maintenance">
+              <div className="card-heading maintenance-heading">
+                <div><p className="section-label">SERVICE &amp; MAINTENANCE FORECAST</p><h2>Plan the cost after you buy</h2><p>Projected from mileage, vehicle age and segment-level service patterns.</p></div>
+                <div className="horizon-tabs" aria-label="Maintenance forecast period">
+                  {([1, 3, 5] as const).map((years) => <button key={years} className={maintenanceHorizon === years ? "active" : ""} onClick={() => setMaintenanceHorizon(years)}>{years} yr</button>)}
+                </div>
+              </div>
+
+              <div className="maintenance-summary">
+                <div className="projected-total"><span>Projected total</span><strong>{formatCurrency(maintenanceForecast.total)}</strong><small>Likely range {formatCurrency(maintenanceForecast.low)}–{formatCurrency(maintenanceForecast.high)}</small></div>
+                <div><span>Monthly reserve</span><strong>{formatCurrency(maintenanceForecast.monthly)}</strong><small>Set aside per month</small></div>
+                <div><span>Vs. similar SUVs</span><strong className="positive">{formatCurrency(Math.max(0, maintenanceForecast.savings))} less</strong><small>Across the selected period</small></div>
+              </div>
+
+              <div className="maintenance-body">
+                <div className="annual-forecast">
+                  <div className="subsection-heading"><strong>Annual forecast</strong><span>Service + wear + repair reserve</span></div>
+                  <div className="annual-bars">
+                    {maintenanceForecast.annual.map((cost, index) => (
+                      <div key={`${maintenanceHorizon}-${index}`}><span>Year {index + 1}</span><div><i style={{ width: `${Math.max(28, (cost / Math.max(...maintenanceForecast.annual)) * 100)}%` }} /></div><strong>{formatCurrency(cost)}</strong></div>
+                    ))}
+                  </div>
+                  <div className="cost-mix">
+                    <div className="subsection-heading"><strong>What the budget covers</strong><span>Not fuel, insurance or financing</span></div>
+                    <div className="mix-track"><span style={{ width: "47%" }} /><span style={{ width: "36%" }} /><span style={{ width: "17%" }} /></div>
+                    <div className="mix-legend"><span><i className="routine" />Routine service <strong>{formatCurrency(maintenanceForecast.routine)}</strong></span><span><i className="wear" />Wear items <strong>{formatCurrency(maintenanceForecast.wear)}</strong></span><span><i className="reserve" />Repair reserve <strong>{formatCurrency(maintenanceForecast.reserve)}</strong></span></div>
+                  </div>
+                </div>
+
+                <div className="service-schedule">
+                  <div className="subsection-heading"><strong>Likely upcoming service</strong><span>Based on {formatNumber(selectedListing.miles)} miles today</span></div>
+                  <div className="milestone-list">
+                    {maintenanceForecast.milestones.map((item) => (
+                      <div key={item.title}><span className="service-icon"><Wrench size={15} /></span><p><strong>{item.title}</strong><small>{item.detail}</small><em>{item.timing}</em></p><b>{formatCurrency(item.low)}–{formatCurrency(item.high)}</b></div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <p className="maintenance-note"><Info size={13} /><span><strong>Model-based demo estimate.</strong> Actual costs depend on condition, labor rates, service history and driving. Connect a licensed maintenance-cost dataset and the manufacturer schedule before presenting this as live vehicle-specific data.</span></p>
             </article>
 
             <article className="card alternatives-card" id="alternatives">
-              <div className="card-heading"><div><p className="section-label">SMARTER SHORTLIST</p><h2>Strong alternatives for less</h2></div><button className="text-button">Compare all <ArrowRight size={15} /></button></div>
+              <div className="card-heading"><div><p className="section-label">SMARTER SHORTLIST</p><h2>Smart alternatives to compare</h2></div><button className="text-button" onClick={() => setNotice("Showing every comparable model available in the demo catalog")}>Compare all <ArrowRight size={15} /></button></div>
               <div className="alternative-grid">
-                {alternatives.map((item, index) => (
-                  <button className="alternative" key={item.name} onClick={() => chooseVehicle(item.key)}>
-                    <div className={`alt-visual alt-${index + 1}`}><CarFront size={46} strokeWidth={1.3} /><span>{item.score} reliability</span></div>
-                    <div className="alt-copy"><h3>{item.name}</h3><p>{item.strength}</p><div><strong>{formatCurrency(item.price)}</strong><span>{formatCurrency(Math.abs(item.delta))} less</span></div></div>
-                  </button>
-                ))}
+                {alternatives.filter((item) => item.key !== vehicleKey).map((item, index) => {
+                  const option = vehicles[item.key];
+                  const optionPrice = option.fairValue + (condition === "new" ? 10_500 : 0);
+                  const delta = optionPrice - selectedListing.price;
+                  return <button className="alternative" key={item.key} onClick={() => chooseVehicle(item.key)}>
+                    <div className={`alt-visual alt-${index + 1}`}><CarFront size={46} strokeWidth={1.3} /><span>{option.reliability} reliability</span></div>
+                    <div className="alt-copy"><h3>{condition === "new" ? 2026 : option.year} {option.make} {option.model} {option.trim}</h3><p>{item.strength}</p><div><strong>{formatCurrency(optionPrice)}</strong><span>{formatCurrency(Math.abs(delta))} {delta <= 0 ? "less" : "more"}</span></div></div>
+                  </button>;
+                })}
               </div>
             </article>
           </div>
@@ -456,7 +621,8 @@ export default function Home() {
                 <div><AlertTriangle size={18} /><p><span>Open recalls</span><strong>{vehicle.recallCount}</strong><small>{vehicle.recallCount ? "Free dealer remedy available" : "No open campaigns found"}</small></p></div>
                 <div><Gauge size={18} /><p><span>Expected lifespan</span><strong>200k+ mi</strong><small>With routine maintenance</small></p></div>
               </div>
-              <button className="text-button">Explore reliability report <ArrowRight size={15} /></button>
+              <button className="text-button" onClick={() => setIsReliabilityOpen(!isReliabilityOpen)}>{isReliabilityOpen ? "Hide reliability report" : "Explore reliability report"} <ArrowRight size={15} /></button>
+              {isReliabilityOpen && <div className="method-detail"><strong>Reliability context</strong><p>The score combines modeled repair frequency, severity, longevity, and recall count. Verify open campaigns against the complete VIN through NHTSA before purchase.</p></div>}
             </article>
 
             <article className="card target-card" id="playbook">
@@ -464,13 +630,13 @@ export default function Home() {
               <p className="target-intro">A realistic opening target based on this vehicle, local inventory, and recent price movement.</p>
               <label className="target-slider">
                 <span><small>Aggressive</small><small>Easy close</small></span>
-                <input type="range" min={Math.round(valuation.lowRange * 0.98)} max={Math.round(selectedListing.price * 1.01)} step="50" value={targetPrice} onChange={(event) => setTargetPrice(Number(event.target.value))} />
+                <div className="target-adjust"><button type="button" aria-label="Decrease target price" disabled={targetPrice <= targetMin} onClick={() => setTargetPrice(Math.max(targetMin, targetPrice - 100))}>−</button><input type="range" aria-label="Negotiation target price" min={targetMin} max={targetMax} step="10" value={targetPrice} onChange={(event) => setTargetPrice(Number(event.target.value))} /><button type="button" aria-label="Increase target price" disabled={targetPrice >= targetMax} onClick={() => setTargetPrice(Math.min(targetMax, targetPrice + 100))}>+</button></div>
               </label>
               <div className="target-savings"><span>Potential savings</span><strong>{formatCurrency(Math.max(0, selectedListing.price - targetPrice))}</strong></div>
               <div className="playbook">
                 <h3>Your 3-step playbook</h3>
                 <ol>
-                  <li><span>1</span><p><strong>Lead with comparable #2</strong>It is {formatCurrency(Math.max(0, selectedListing.price - 24_250))} less within {radius} miles.</p></li>
+                  <li><span>1</span><p><strong>Anchor with the closest comparable</strong>{comparisonListing ? `${formatCurrency(Math.abs(selectedListing.price - comparisonListing.price))} ${comparisonListing.price <= selectedListing.price ? "less" : "more"} within ${radius} miles.` : "Ask the dealer to match the local market."}</p></li>
                   <li><span>2</span><p><strong>Ask for out-the-door price</strong>Keep fees from hiding in the monthly payment.</p></li>
                   <li><span>3</span><p><strong>Time the offer</strong>Try Monday evening or the final 3 days of the month.</p></li>
                 </ol>

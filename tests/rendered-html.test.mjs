@@ -29,6 +29,9 @@ test("server-renders the AutoLens decision cockpit", async () => {
   assert.match(html, /Car brand/);
   assert.match(html, /Car model/);
   assert.match(html, /Best comparable listings/);
+  assert.match(html, /Plan the cost after you buy/);
+  assert.match(html, /Projected total/);
+  assert.match(html, /Model-based demo estimate/);
   assert.match(html, /Your 3-step playbook/);
   assert.match(html, /og\.png/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/);

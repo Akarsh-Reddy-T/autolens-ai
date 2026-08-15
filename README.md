@@ -1,6 +1,6 @@
 # AutoLens AI
 
-AutoLens AI is a responsive vehicle-buying intelligence cockpit. It consolidates local asking prices, an explainable fair-value estimate, listing comparisons, vehicle-history risk, reliability and recalls, alternatives, a price target, and negotiation guidance.
+AutoLens AI is a responsive vehicle-buying intelligence cockpit. It consolidates local asking prices, an explainable fair-value estimate, listing comparisons, vehicle-history risk, reliability and recalls, projected service and maintenance costs, alternatives, a price target, and negotiation guidance.
 
 The repository includes two deployable surfaces:
 
@@ -29,6 +29,7 @@ The demo clearly labels sample data. A production deployment should use:
 3. A licensed NMVTIS-compatible provider for title brands plus CARFAX or AutoCheck where contractually available for accident/service records.
 4. A scheduled comparable-sales pipeline that normalizes trim, mileage, condition, geography, time-on-market, and dealer fees.
 5. A versioned valuation model with backtesting, confidence calibration, drift monitoring, and an explanation log for every estimate.
+6. Licensed maintenance-cost data plus manufacturer service schedules, localized labor rates, parts inflation, and service-history adjustments for ownership forecasts.
 
 Never present an incomplete history lookup as a clean vehicle. Treat missing provider coverage as “unknown,” not “no accidents.”
 
