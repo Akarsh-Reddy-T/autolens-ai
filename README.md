@@ -6,7 +6,10 @@ The repository contains a full-stack edge application and a static GitHub Pages 
 
 ## What the application does
 
-- Searches by manufacturer, model, condition, ZIP code, and radius.
+- Accepts typed make, model, and model year instead of limiting search to preset vehicles.
+- Resolves U.S. makes and models from the public NHTSA vPIC catalog for model years 1981 through next model year.
+- Queries current NHTSA model-level recall campaigns for catalog-matched vehicles.
+- Searches by condition, ZIP code, and radius while clearly separating catalog coverage from local-market coverage.
 - Compares local listings and supports sorting by match, price, or mileage.
 - Produces an explainable fair-value range, confidence score, deal score, and price verdict.
 - Adjusts valuation for year, mileage, trim, region, search radius, condition, and reported damage.
@@ -23,15 +26,16 @@ The repository contains a full-stack edge application and a static GitHub Pages 
 
 ## Product boundaries
 
-AutoLens AI currently demonstrates the complete product experience with deterministic sample data. It does **not** claim that the displayed listing prices, VIN history, recalls, or maintenance forecasts are live facts.
+AutoLens AI combines a live public vehicle catalog and recall lookup with a complete deterministic demo experience. The typed make/model search uses NHTSA data, while the rich pricing dashboard is currently available for the three modeled demo vehicles. It does **not** claim that demo listing prices, VIN history, or maintenance forecasts are live facts.
 
 | Capability | Current implementation | Production requirement |
 | --- | --- | --- |
+| Make/model catalog | Live NHTSA vPIC make/model/year lookup | Cache, monitoring, and provider fallback for production availability |
 | Listings | Modeled local inventory | Licensed active and recently removed listing feed |
 | Valuation | Deterministic explainable engine | Normalized comparable-sales pipeline and calibrated model |
 | VIN/title history | Clearly labeled demo records | NMVTIS-compatible provider and complete VIN lookup |
 | Accidents/service | Modeled history signals | Contracted history provider with coverage reporting |
-| Recalls | Modeled counts | NHTSA recall/campaign lookup using the complete VIN |
+| Recalls | Live NHTSA model-level campaigns for catalog search; modeled counts in the rich demo | Complete-VIN applicability and remedy-status verification |
 | Maintenance | Mileage- and model-based forecast | Manufacturer schedules, localized labor, parts, and condition data |
 | Recommendations | Deterministic comparison rules | Broader catalog, inventory availability, preferences, and ownership-cost data |
 | Negotiation guidance | Rule-based target and playbook | Fees, taxes, financing, inspection, and dealer-specific context |
@@ -51,6 +55,7 @@ flowchart LR
     RESULT --> UI
     PROVIDERS["Future licensed data providers"] --> NORMALIZE["Normalization and coverage layer"]
     NORMALIZE --> ENGINE
+    NHTSA["NHTSA vPIC + recalls APIs"] --> UI
     UI --> PAGES["Static GitHub Pages build"]
     UI --> EDGE["Vinext edge deployment"]
 ```
@@ -100,7 +105,14 @@ autolens-ai/
 - npm
 - Git, if contributing or publishing
 
-No API keys or provider credentials are required to run the modeled demo.
+No API keys or provider credentials are required to run the demo or use the public NHTSA catalog and recall lookups.
+
+The browser calls these public endpoints directly:
+
+- `GetModelsForMakeYear` from the [NHTSA vPIC Vehicle API](https://vpic.nhtsa.dot.gov/api/)
+- `recallsByVehicle` from the [NHTSA Recalls API](https://api.nhtsa.gov/)
+
+Public API availability and rate limits still apply. A production deployment should proxy, cache, monitor, and normalize these responses.
 
 ## Local development
 
@@ -219,6 +231,7 @@ The current verification suite checks that:
 - The full-stack application builds successfully.
 - The main route server-renders with the expected product sections.
 - Search controls, listings, maintenance, negotiation, and social metadata are present.
+- The typed NHTSA catalog search and recall endpoints remain connected.
 - The valuation route validates input and calls the shared market engine.
 - The static Pages configuration and deployment workflow remain available.
 - Removed starter artifacts are not accidentally reintroduced.
