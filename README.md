@@ -38,3 +38,7 @@ Never present an incomplete history lookup as a clean vehicle. Treat missing pro
 The workflow at `.github/workflows/deploy-pages.yml` publishes `dist-pages` on pushes to `main`. In the repository settings, set **Pages → Source** to **GitHub Actions**. Project-site base paths are derived automatically from `GITHUB_REPOSITORY`.
 
 GitHub Pages is static hosting, so keep provider secrets and paid API calls in the edge API; point the production Pages client to that API when credentials are configured.
+
+## Credential safety
+
+Do not commit usernames, passwords, provider tokens, API keys, VIN-report credentials, or local `.env` files. The repository ignores `.env*`, private keys, build output, and local runtime state. Configure future provider credentials only through GitHub Actions secrets or the hosting platform's encrypted environment-variable settings, and keep all paid-provider requests behind the server API.

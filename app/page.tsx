@@ -428,7 +428,7 @@ export default function Home() {
         </nav>
         <div className="header-actions">
           <button className="icon-button" aria-label={isAlerted ? "Disable price alerts" : "Enable price alerts"} onClick={() => { setIsAlerted(!isAlerted); setNotice(isAlerted ? "Price alerts paused" : "Price alerts enabled for this search"); }}><Bell size={18} fill={isAlerted ? "currentColor" : "none"} /></button>
-          <button className="user-button" aria-label="Account status" onClick={() => setNotice("Demo profile active—connect authentication for saved vehicles across devices")}><span>AR</span><ChevronDown size={15} /></button>
+          <button className="user-button" aria-label="Account status" onClick={() => setNotice("Demo profile active—connect authentication for saved vehicles across devices")}><span><UserRound size={16} /></span><ChevronDown size={15} /></button>
           <button className="mobile-menu" aria-label={isMenuOpen ? "Close menu" : "Open menu"} aria-expanded={isMenuOpen} onClick={() => setIsMenuOpen(!isMenuOpen)}>{isMenuOpen ? <X size={20} /> : <Menu size={20} />}</button>
         </div>
       </header>
